@@ -27,6 +27,8 @@ while True:
         for addr in clients:
             if addr!=client_addr:
                 s.sendto(msg_b,addr)
+    else:
+        print(f'Unknown request type:{request_type}')
 
                 
                 
