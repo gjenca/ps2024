@@ -4,7 +4,17 @@ import socket
 import multiprocessing
 import logging
 import re
+import pathlib
 
+DOCUMENT_ROOT='./doc'
+
+MIME_TYPES={
+    '.html':'text/html',
+    '.txt':'text/plain',
+    '.gif':'image/gif',
+    '.jpg':'image/jpg',
+    '':'application/octet-stream',
+}
 
 class BadRequest(Exception):
 
@@ -15,14 +25,8 @@ class ConnectionClosed(Exception):
     pass
 
 STATUS_OK=(200,'OK')
-STATUS_REQUEST_CONTENT_EMPTY=(201,'Content empty')
-STATUS_NOT_A_NUMBER=(202,'Not a number')
-STATUS_BAD_REQUEST=(301,'Bad request')
-STATUS_REQUEST_CONTENT_NONEMPTY=(204,'Content nonempty')
-STATUS_STACK_TOO_SHORT=(203,'Stack too short')
-STATUS_STACK_EMPTY=(205,'Stack empty')
-
-
+STATUS_BAD_REQUEST=(400,'Bad request')
+STATUS_NOT_FOUND=(404,'Not found')
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -90,18 +94,39 @@ class Response:
             {self.status[0]} {self.status[1]},
             {self.content})'''
 
-def method_GET(request):
+class ErrorResponse(Response):
 
-    return Response(
-        STATUS_OK,
-        {'content-type':'text-html'},
-        b'''<html>
+    def __init__(self,status):
+        
+        self.status=status
+        self.content=f'''
+        <html>
         <body>
         <h1>
-        Kapybara
+        {status[0]} {status[1]}
         </h1>
         </body>
-        </html>''')
+        </html>'''.encode('ascii')
+        self.headers={'Content-type':'text/html'}
+        
+
+
+def method_GET(request):
+
+    filename=DOCUMENT_ROOT+request.url
+    try:
+        with open(filename,'rb') as f:
+            content=f.read()
+    except FileNotFoundError:
+        return ErrorResponse(STATUS_NOT_FOUND)
+    extension=pathlib.Path(filename).suffix
+    mime_type=MIME_TYPES.get(extension,'application/octet-stream')
+    logging.info(f'MIME_TYPE:{mime_type}')
+    return Response(
+        STATUS_OK,
+        {'Content-type':mime_type},
+        content)
+
 
 METHODS={
     'GET':method_GET,
