@@ -4,6 +4,7 @@ import socket
 import multiprocessing
 import logging
 import re
+import os
 import pathlib
 
 DOCUMENT_ROOT='./doc'
@@ -25,6 +26,7 @@ class ConnectionClosed(Exception):
     pass
 
 STATUS_OK=(200,'OK')
+STATUS_NOT_MODIFIED=(304,'Not modified')
 STATUS_BAD_REQUEST=(400,'Bad request')
 STATUS_NOT_FOUND=(404,'Not found')
 
@@ -80,19 +82,19 @@ class Response:
     def send(self,f):
         
         f.write(f'HTTP/1.1 {self.status[0]} {self.status[1]}\r\n'.encode('ascii'))
-        f.write(f'Content-length: {len(self.content)}\r\n'.encode('ascii'))
+        if self.content:
+            f.write(f'Content-length: {len(self.content)}\r\n'.encode('ascii'))
         for header_name,header_value in self.headers.items():
             f.write(f'{header_name}: {header_value}\r\n'.encode('ascii'))
         f.write('\r\n'.encode('ascii'))
-        f.write(self.content)
+        if self.content:
+            f.write(self.content)
         f.flush()
 
 
     def __repr__(self):
 
-        return f'''Response(
-            {self.status[0]} {self.status[1]},
-            {self.content})'''
+        return f'''Response({self.status[0]} {self.status[1]})'''
 
 class ErrorResponse(Response):
 
@@ -122,10 +124,22 @@ def method_GET(request):
     extension=pathlib.Path(filename).suffix
     mime_type=MIME_TYPES.get(extension,'application/octet-stream')
     logging.info(f'MIME_TYPE:{mime_type}')
-    return Response(
-        STATUS_OK,
-        {'Content-type':mime_type},
-        content)
+    etag=str(os.stat(filename).st_mtime)
+    if 'if-none-match' in request.headers:
+        print(etag,request.headers['if-none-match'])
+        if etag==request.headers['if-none-match']:
+            return Response(
+                   STATUS_NOT_MODIFIED,
+                   {},
+                   None
+                )
+    else:
+        return Response(
+            STATUS_OK,
+            {'Content-type':mime_type,
+            'Etag':etag,
+            },
+            content)
 
 
 METHODS={
@@ -151,8 +165,8 @@ def handle_client(client_socket,addr):
             response=METHODS[req.method](req)
         else:
             response=Response(STATUS_BAD_REQUEST)
-        logging.info(f'{response}')
         response.send(f)
+        logging.info(f'{response}')
         if response.status==STATUS_BAD_REQUEST:
             break
     logging.info(f'handle_client {addr} stop')
