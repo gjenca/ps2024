@@ -1,0 +1,11 @@
+li#cursor {
+	background-color:yellow;
+  color:red;
+	border: 1px solid red;
+}
+
+a {
+  color:green;
+}
+
+
